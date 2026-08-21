@@ -65,7 +65,10 @@ MIDDLEWARE = [
 # still gates which origins may call the API from a browser at all.
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:8000,http://127.0.0.1:8000',
+    # 8080, not 8000 - this API's own dev server already runs on 8000
+    # (manage.py runserver's default). Local KatTrap dev should be served
+    # on 8080 (e.g. `python3 -m http.server 8080`) to avoid the collision.
+    default='http://localhost:8080,http://127.0.0.1:8080',
     cast=Csv(),
 )
 

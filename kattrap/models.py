@@ -47,18 +47,41 @@ class ItemType(models.TextChoices):
     PERK = 'perk', 'Perk'
 
 
+class ItemSlot(models.TextChoices):
+    """Which equip slot a cosmetic occupies. Only 'outfit' exists today -
+    every cosmetic is a complete look, worn as a whole (see the project's
+    own decision: full alternate sprite sheets per outfit now, not
+    independently-purchasable pieces). Structured as a real choices field
+    from day one specifically so a future move to a real per-piece
+    wardrobe (hat/top/accessory, each its own slot) is just new slot
+    values on new items - EquippedItem below already supports a user
+    having one equipped item per slot per character, simultaneously,
+    with zero schema changes needed when that day comes.
+    """
+
+    OUTFIT = 'outfit', 'Outfit'
+
+
 class StoreItem(models.Model):
     """One character's store catalog entry.
 
     Bought with that character's own coins (via its CharacterWallet);
     min_level gates purchase against that same character's wallet.level -
-    a Cat item is never gated by Mouse or Dog progress.
+    a Cat item is never gated by Mouse or Dog progress. slot only applies
+    to cosmetics (blank for perks) - see ItemSlot above.
     """
 
     character = models.CharField(max_length=10, choices=Character.choices)
     slug = models.SlugField()
     name = models.CharField(max_length=100)
     item_type = models.CharField(max_length=10, choices=ItemType.choices)
+    slot = models.CharField(max_length=20, choices=ItemSlot.choices, blank=True)
+    # Frontend asset path for this look (e.g. 'assets/cat_witch.png') -
+    # only meaningful for outfit-slot cosmetics. Blank/unused until real
+    # outfit art exists; added now alongside slot/EquippedItem so wiring
+    # up real cosmetics later needs zero further schema changes, only
+    # populating this field and building the frontend swap logic.
+    sprite_src = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
     cost = models.PositiveIntegerField()
     min_level = models.PositiveIntegerField(default=1)
@@ -69,6 +92,28 @@ class StoreItem(models.Model):
 
     def __str__(self):
         return f'[{self.character}] {self.name} ({self.cost} coins, lvl {self.min_level}+)'
+
+
+class EquippedItem(models.Model):
+    """Tracks the currently-worn cosmetic per (user, character, slot).
+
+    Only one row per (user, character, slot) - equipping a new item in an
+    already-occupied slot replaces this row rather than adding a second
+    one. No row at all means "wearing the default look" for that slot.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='equipped_items'
+    )
+    character = models.CharField(max_length=10, choices=Character.choices)
+    slot = models.CharField(max_length=20, choices=ItemSlot.choices)
+    item = models.ForeignKey(StoreItem, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('user', 'character', 'slot')
+
+    def __str__(self):
+        return f'{self.user} / {self.character} [{self.slot}]: {self.item.name}'
 
 
 class OwnedItem(models.Model):

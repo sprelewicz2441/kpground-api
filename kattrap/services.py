@@ -2,7 +2,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from .economy import DAILY_GIFT_COINS_PER_CHARACTER, LOSS_COINS, LOSS_XP, WIN_COINS, WIN_XP
-from .models import Character, CharacterWallet, DailyGiftClaim, OwnedItem, StoreItem
+from .models import (
+    Character,
+    CharacterWallet,
+    DailyGiftClaim,
+    EquippedItem,
+    ItemType,
+    OwnedItem,
+    StoreItem,
+)
 
 # In-play coin pickups are tallied client-side during a round and
 # submitted once at round end (see submit_round) rather than one network
@@ -95,3 +103,45 @@ def purchase_item(user, character, item_slug):
     wallet.save()
     OwnedItem.objects.create(user=user, item=item)
     return wallet
+
+
+class EquipError(Exception):
+    """Raised for any equip-rejection reason; message is user-facing."""
+
+
+def get_equipped(user, character):
+    """Returns {slot: StoreItem} for everything currently equipped - an
+    empty dict means every slot is at its default look. Only ever has one
+    entry today (the 'outfit' slot, see ItemSlot), but already returns a
+    dict keyed by slot so a future second slot needs no caller changes."""
+    return {
+        e.slot: e.item
+        for e in EquippedItem.objects.filter(user=user, character=character).select_related('item')
+    }
+
+
+@transaction.atomic
+def equip_item(user, character, item_slug):
+    try:
+        item = StoreItem.objects.get(character=character, slug=item_slug, is_active=True)
+    except StoreItem.DoesNotExist:
+        raise EquipError('That item does not exist.')
+
+    if item.item_type != ItemType.COSMETIC:
+        raise EquipError('Only cosmetic items can be equipped.')
+    if not OwnedItem.objects.filter(user=user, item=item).exists():
+        raise EquipError('You need to own this item before equipping it.')
+
+    # Replaces whatever was already equipped in this item's slot, not
+    # additive - see EquippedItem's own unique_together.
+    EquippedItem.objects.update_or_create(
+        user=user, character=character, slot=item.slot, defaults={'item': item}
+    )
+    return get_equipped(user, character)
+
+
+def unequip_slot(user, character, slot):
+    """Reverts a slot to its default look. A no-op (not an error) if
+    nothing was equipped in that slot to begin with."""
+    EquippedItem.objects.filter(user=user, character=character, slot=slot).delete()
+    return get_equipped(user, character)
