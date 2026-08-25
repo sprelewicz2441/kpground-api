@@ -36,32 +36,44 @@ PLACEHOLDER_ITEMS = [
     },
 ]
 
-# Dog outfit-slot cosmetics - a reference image (5 tutu colors) locked in
-# which 5 looks to ship, but that image was a single repeated pose with a
-# colored background baked in per column, not game-ready art (no real
-# walk-cycle, no clean transparent background) - see the sibling kat_trap
-# repo's CLAUDE.md, Currency & economy system section, for that decision.
-# sprite_src points at the *default* dog_v2.png for every one of these
-# (matching js/utils/outfits.js's own DEFAULT_SPRITE_SRC exactly) - purely
-# a placeholder so the purchase/equip plumbing has real rows to exercise;
-# equipping one today has zero visual effect. is_active=False keeps them
-# out of the live store until real per-color art replaces this sprite_src
-# - flip to True (or just re-run this command after updating sprite_src)
-# once that art exists, no other code changes needed anywhere.
+# Dog outfit-slot cosmetics - real per-color walk-cycle art now exists for
+# 4 of the original 5 planned colors (pink/teal/orange/green), extracted
+# from a single combined ChatGPT generation (see the sibling kat_trap
+# repo's CLAUDE.md, Currency & economy system section, for the full
+# extraction story - first via a screenshot/chroma-key pipeline that
+# shipped visibly blurry sprites, later replaced with a lossless direct
+# PNG download once a real per-file macOS sandbox ACL blocking that
+# download was worked around). Purple came back with the same frozen-pose
+# defect seen in earlier single-color attempts and was dropped from that
+# generation entirely - it stays a placeholder (still pointing at the
+# default dog_v2.png, is_active=False) until it's regenerated on its own.
 DOG_OUTFIT_ITEMS = [
+    {
+        'character': 'dog',
+        'slug': 'tutu-purple',
+        'name': 'Purple Tutu',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.OUTFIT,
+        'sprite_src': './assets/dog_v2.png?v=4',
+        'description': 'A sparkly purple tutu for Dummy.',
+        'cost': 50,
+        'min_level': 1,
+        'is_active': False,
+    },
+] + [
     {
         'character': 'dog',
         'slug': f'tutu-{color}',
         'name': f'{color.capitalize()} Tutu',
         'item_type': ItemType.COSMETIC,
         'slot': ItemSlot.OUTFIT,
-        'sprite_src': './assets/dog_v2.png?v=4',
+        'sprite_src': f'./assets/dog_v2_tutu_{color}.png?v=3',
         'description': f'A sparkly {color} tutu for Dummy.',
         'cost': 50,
         'min_level': 1,
-        'is_active': False,
+        'is_active': True,
     }
-    for color in ['purple', 'pink', 'teal', 'orange', 'green']
+    for color in ['pink', 'teal', 'orange', 'green']
 ]
 
 

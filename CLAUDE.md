@@ -16,7 +16,7 @@ See `../kat_trap/CLAUDE.md` and `../kpground/CLAUDE.md` for the frontends this s
 - `uv run python manage.py makemigrations` / `migrate`
 - `uv run python manage.py check` — cheap sanity check, worth running before anything else after a settings/model change
 - `uv run python manage.py seed_kathryn` — idempotent: creates the KatTrap OAuth2 `Application` (public client, password grant) + Kathryn's user (unusable password — she only ever authenticates via quick-login) + her three character wallets
-- `uv run python manage.py seed_store` — idempotent: seeds a **placeholder** store catalog (see Known gaps below)
+- `uv run python manage.py seed_store` — idempotent: seeds the store catalog. Perks are still placeholder data (real names/costs/cosmetics for Cat/Mouse aren't designed yet), but the dog's outfit cosmetics are real: 4 of 5 planned tutu colors (pink/teal/orange/green) point at real per-color walk-cycle art, `is_active=True`; purple stays a placeholder (`is_active=False`, points at the default `dog_v2.png`) pending its own art regeneration — see the sibling `kat_trap` repo's CLAUDE.md, Currency & economy system section, for that art's own extraction history
 
 Local dev needs no setup beyond `uv sync` — `DATABASE_URL` is optional and falls back to a local `db.sqlite3` (gitignored). Copy `.env.example` to `.env` to override any setting.
 
@@ -48,7 +48,9 @@ The central modeling decision in `kattrap/models.py`: a user has **three indepen
 
 A planned (not yet built) "aggregate" store, spendable against the *sum* of a user's three wallets, is meant to be a read-only computed sum over the three existing wallets — don't add a fourth currency/wallet type for it later.
 
-`StoreItem(character, slug, name, item_type[cosmetic|perk], cost, min_level)` is a per-character catalog — its `character` field is both "which wallet pays for this" and "which wallet's level gates it". `OwnedItem(user, item)` is a permanent purchase record (`unique_together` blocks re-buying the same item).
+`StoreItem(character, slug, name, item_type[cosmetic|perk], cost, min_level)` is a per-character catalog — its `character` field is both "which wallet pays for this" and "which wallet's level gates it". `OwnedItem(user, item)` is a permanent purchase record (`unique_together` blocks re-buying the same item). `sell_item()` (`kattrap/services.py`) is the reverse: refunds `SELL_REFUND_FRACTION` (0.2, rounded to a whole coin — see `economy.py`) of `cost` and deletes the `OwnedItem` row; deliberately well under 1.0 so buy-then-sell can't launder coins. Only cosmetics and perks alike can be sold — there's no item-type restriction, unlike equip below.
+
+Cosmetics additionally use `slot` (`ItemSlot`, only `'outfit'` exists today — a real choices field from day one so a future per-piece wardrobe, e.g. hat/top/accessory each its own slot, needs new slot values only, no schema change) and `sprite_src` (the frontend asset path for that look). `EquippedItem(user, character, slot, item)` (`unique_together` on `user`/`character`/`slot`) tracks what's currently worn — no row means the default look for that slot. `equip_item()`/`unequip_slot()` in `services.py` are the only way this table changes; `equip_item()` rejects perks (`EquipError`) and un-owned items. `sell_item()` also deletes any `EquippedItem` row pointing at the sold item first, so a sale can never leave one pointing at something the user no longer owns.
 
 `kattrap/economy.py` holds every tunable number (coin/XP amounts per round outcome, daily gift amount, the XP-per-level curve) as plain module constants, deliberately not DB-configurable — retune by editing this file, not by adding an admin-editable settings model, until there's an actual need to change these without a deploy. `XP_PER_LEVEL` uses a flat linear curve (advancing from level N to N+1 costs `N * XP_PER_LEVEL`) as the simplest starting point, untested against real play data. Coin/XP amounts are currently flat by outcome (`WIN_COINS`/`LOSS_COINS`, `WIN_XP`/`LOSS_XP`) — the loss amount is deliberately small but non-zero so losing still feels like progress; a performance-scaled bonus (time survived, close-call escapes) is planned as an addition on top of this, not a replacement.
 
@@ -56,7 +58,7 @@ A planned (not yet built) "aggregate" store, spendable against the *sum* of a us
 
 ### Business logic lives in `services.py`, not in views
 
-`kattrap/views.py`'s `APIView` classes stay thin — parse the request, call a `services.py` function, serialize the response. `purchase_item()`, `claim_daily_gift()`, and `submit_round()` do the actual work, independent of HTTP, and are where any new economy rule belongs. `PurchaseError` is a plain exception carrying a user-facing message, caught in the view and turned into a 400.
+`kattrap/views.py`'s `APIView` classes stay thin — parse the request, call a `services.py` function, serialize the response. `purchase_item()`, `sell_item()`, `equip_item()`, `unequip_slot()`, `claim_daily_gift()`, and `submit_round()` do the actual work, independent of HTTP, and are where any new economy rule belongs. Each has its own exception type (`PurchaseError`, `SellError`, `EquipError`) carrying a user-facing message, caught in its view and turned into a 400 — follow this pattern for any new mutating action rather than returning error tuples or raising a generic exception.
 
 Wallet-mutating operations wrap in `transaction.atomic()` and take `select_for_update()` on the wallet row(s) being changed — deliberate, since these are read-modify-write balance updates. `DailyGiftClaim`'s `unique_together(user, claimed_date)` is the actual guard against a double claim, not application logic alone — `claim_daily_gift()`'s `get_or_create` just turns a would-be race into a clean "already claimed" result instead of a raw `IntegrityError`.
 
@@ -66,12 +68,25 @@ Wallet-mutating operations wrap in `transaction.atomic()` and take `select_for_u
 
 Every real value (`SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `DATABASE_URL`, `CORS_ALLOWED_ORIGINS`, `ENABLE_KATHRYN_QUICKLOGIN`) comes from `python-decouple`'s `config()`, documented in `.env.example` — there's no real production secret hardcoded anywhere, only an explicit dev-only fallback for `SECRET_KEY`. `DATABASES` uses `dj_database_url.config()` against `DATABASE_URL`, falling back to local SQLite when unset — the intended database in any real environment is Neon Postgres (see `../kpground/CLAUDE.md`'s hosting plan), but nothing here hardcodes that; any Postgres-compatible `DATABASE_URL` works. `CORS_ALLOWED_ORIGINS` has to list each frontend origin explicitly — CORS is unrelated to the OAuth2 bearer-token auth itself (tokens aren't cookies, so cookie-domain rules don't apply), but a browser still won't let a page on one origin call this API at all unless CORS allows it.
 
+## Deploy (Render Web Service + Neon)
+
+Render Web Service, not a Static Site (see `../kat_trap/CLAUDE.md`'s Deployment & hosting for that contrast) — this is a real Django process, not static files. Environment: Python 3. No `Procfile`; Render's dashboard build/start command fields are used directly since this is a `uv`-managed project, not a plain `requirements.txt` one:
+
+- **Build Command**: `pip install uv && uv sync --frozen && uv run python manage.py collectstatic --noinput`
+- **Pre-Deploy Command**: `uv run python manage.py migrate` (runs after build, before the new instance takes traffic — the right place for migrations, not folded into the build command)
+- **Start Command**: `uv run gunicorn config.wsgi:application --bind 0.0.0.0:$PORT`
+
+Static files (admin + DRF browsable-API CSS/JS only — this API has no other static content) are served by whitenoise (`whitenoise.middleware.WhiteNoiseMiddleware`, `STORAGES['staticfiles']` in `config/settings.py`) directly from the Django process — no separate static host/CDN needed at this scale. `collectstatic` writes to `STATIC_ROOT` (`staticfiles/`, gitignored, rebuilt every deploy).
+
+Required environment variables on the Render service (see `.env.example` for the full list/format): `SECRET_KEY` (a real random value, not the dev default — generate with `uv run python -c "import secrets; print(secrets.token_urlsafe(50))"`), `DEBUG=False`, `DATABASE_URL` (Neon's connection string), `CORS_ALLOWED_ORIGINS` (every live frontend origin — `https://kattrap.kpground.com`, `https://kattrap.onrender.com`, plus `kpground.com`'s once it integrates). `ALLOWED_HOSTS` doesn't need Render's own `*.onrender.com` hostname added by hand — `RENDER_EXTERNAL_HOSTNAME` is set automatically by Render on every deploy and gets appended in `settings.py`. `ENABLE_KATHRYN_QUICKLOGIN` can stay at its default (`True`) same as dev, since Kathryn is still the only real user.
+
+The database itself is Neon Postgres, not Render's own Postgres add-on — see `../kpground/CLAUDE.md`'s hosting table for why (Render's free Postgres auto-deletes after 30+14 days). After the first deploy, `seed_kathryn` and `seed_store` need to run once against the live DB — via Render's shell (dashboard → service → Shell tab) rather than locally, since local `manage.py` talks to SQLite unless `DATABASE_URL` is also set in the local `.env`, which it deliberately isn't.
+
 ## Known gaps (worth knowing before extending this)
 
-- **No test suite.** Verification so far has been manual `curl` checks against a running dev server for every endpoint added.
-- **No deploy config yet.** Not deployed anywhere — the plan is a Render Web Service + Neon (see `../kpground/CLAUDE.md`), not yet done. Local dev only so far.
-- **`seed_store`'s catalog is placeholder data** for exercising the purchase flow, not final game content — real item names, costs, and any cosmetics still need designing.
-- **No frontend integration yet.** Neither `kpground` nor `kat_trap` calls any endpoint here yet (planned for KatTrap: "I'm Kathryn"/"Login" buttons on `SetupScreen`, token storage, wallet/store UI, in-game coin pickups).
+- **No test suite.** Verification so far has been manual `curl` checks against a running dev server for every endpoint added, plus `manage.py check` after any model/view/url change.
+- **`seed_store`'s perk catalog is still placeholder data** for exercising the purchase flow, not final game content — real item names/costs for Cat's and Mouse's perks still need designing. The dog's outfit cosmetics are real (see the command above), not placeholder.
+- **`kat_trap` is fully wired up to this API** — wallet/HUD, the Bloomingtails (cosmetics) + Pawgreens (perks) store, purchase/sell/equip/unequip, and round submission all call real endpoints here. `kpground` (the landing page) still has no integration with this API at all — shared account/auth across the whole site is still just the plan, not built.
 
 ## When working in this repo
 
