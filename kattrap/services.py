@@ -1,7 +1,14 @@
 from django.db import transaction
 from django.utils import timezone
 
-from .economy import DAILY_GIFT_COINS_PER_CHARACTER, LOSS_COINS, LOSS_XP, WIN_COINS, WIN_XP
+from .economy import (
+    DAILY_GIFT_COINS_PER_CHARACTER,
+    LOSS_COINS,
+    LOSS_XP,
+    SELL_REFUND_FRACTION,
+    WIN_COINS,
+    WIN_XP,
+)
 from .models import (
     Character,
     CharacterWallet,
@@ -102,6 +109,37 @@ def purchase_item(user, character, item_slug):
     wallet.coins -= item.cost
     wallet.save()
     OwnedItem.objects.create(user=user, item=item)
+    return wallet
+
+
+class SellError(Exception):
+    """Raised for any sell-rejection reason; message is user-facing."""
+
+
+@transaction.atomic
+def sell_item(user, character, item_slug):
+    try:
+        item = StoreItem.objects.get(character=character, slug=item_slug, is_active=True)
+    except StoreItem.DoesNotExist:
+        raise SellError('That item does not exist.')
+
+    try:
+        owned = OwnedItem.objects.get(user=user, item=item)
+    except OwnedItem.DoesNotExist:
+        raise SellError('You do not own this item.')
+
+    wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
+        user=user, character=character
+    )
+
+    # If this is currently equipped, revert to the default look first -
+    # can't leave an EquippedItem row pointing at an item the user no
+    # longer owns. A no-op for perks, which are never equipped.
+    EquippedItem.objects.filter(user=user, character=character, item=item).delete()
+
+    owned.delete()
+    wallet.coins += round(item.cost * SELL_REFUND_FRACTION)
+    wallet.save()
     return wallet
 
 

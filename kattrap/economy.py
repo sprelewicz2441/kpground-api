@@ -25,3 +25,9 @@ DAILY_GIFT_COINS_PER_CHARACTER = 10
 # XP required to advance from level N to N+1 is XP_PER_LEVEL * N (a linear
 # curve - simplest starting point, revisit once real play data exists).
 XP_PER_LEVEL = 50
+
+# Coins refunded for selling back an owned item, as a fraction of its
+# original cost - rounded to a whole coin (see services.py's sell_item).
+# Deliberately well under 1.0 so buy-then-sell can never be used to
+# launder coins at no cost.
+SELL_REFUND_FRACTION = 0.2

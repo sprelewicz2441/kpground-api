@@ -11,6 +11,7 @@ from .serializers import (
 from .services import (
     EquipError,
     PurchaseError,
+    SellError,
     claim_daily_gift,
     equip_item,
     get_equipped,
@@ -18,6 +19,7 @@ from .services import (
     has_claimed_daily_gift_today,
     ordered_wallets,
     purchase_item,
+    sell_item,
     submit_round,
     unequip_slot,
 )
@@ -76,6 +78,19 @@ class PurchaseView(APIView):
                 request.user, character, serializer.validated_data['item_slug']
             )
         except PurchaseError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        return Response(CharacterWalletSerializer(wallet).data)
+
+
+class SellView(APIView):
+    def post(self, request, character):
+        if character not in Character.values:
+            return Response({'detail': 'Unknown character.'}, status=404)
+        serializer = ItemSlugRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            wallet = sell_item(request.user, character, serializer.validated_data['item_slug'])
+        except SellError as exc:
             return Response({'detail': str(exc)}, status=400)
         return Response(CharacterWalletSerializer(wallet).data)
 
