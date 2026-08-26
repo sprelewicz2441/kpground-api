@@ -76,12 +76,37 @@ DOG_OUTFIT_ITEMS = [
     for color in ['pink', 'teal', 'orange', 'green']
 ]
 
+# Cat outfit-slot cosmetics - same recolor approach as the dog's tutu set,
+# extracted from a combined ChatGPT generation (see the sibling kat_trap
+# repo's CLAUDE.md, Currency & economy system section). Cat's *default*
+# look (cat_v2.png) already wears a pink tutu, so pink isn't sold here -
+# these are the 4 non-default colors, matching the dog's own "skip the
+# color the default already has" pattern. This generation also came back
+# with only 5 real poses per color instead of the requested 6 - same
+# shortfall as the dog's - so the sprite sheet's 6th frame duplicates the
+# 5th rather than being a genuinely new pose (see Cat.js).
+CAT_OUTFIT_ITEMS = [
+    {
+        'character': 'cat',
+        'slug': f'tutu-{color}',
+        'name': f'{color.capitalize()} Tutu',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.OUTFIT,
+        'sprite_src': f'./assets/cat_v2_tutu_{color}.png?v=1',
+        'description': f'A sparkly {color} tutu for Mia.',
+        'cost': 50,
+        'min_level': 1,
+        'is_active': True,
+    }
+    for color in ['teal', 'orange', 'green', 'purple']
+]
+
 
 class Command(BaseCommand):
     help = 'Seeds a small PLACEHOLDER store catalog for testing. Safe to re-run.'
 
     def handle(self, *args, **options):
-        for data in PLACEHOLDER_ITEMS + DOG_OUTFIT_ITEMS:
+        for data in PLACEHOLDER_ITEMS + DOG_OUTFIT_ITEMS + CAT_OUTFIT_ITEMS:
             item, created = StoreItem.objects.update_or_create(
                 character=data['character'], slug=data['slug'], defaults=data
             )
