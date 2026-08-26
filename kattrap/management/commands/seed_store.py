@@ -101,12 +101,39 @@ CAT_OUTFIT_ITEMS = [
     for color in ['teal', 'orange', 'green', 'purple']
 ]
 
+# Mouse outfit-slot cosmetics - same recolor approach again, two combined
+# ChatGPT generations this time (2 colors per image rather than 4, since
+# each color needs a full 3x4 direction grid - 12 frames - instead of the
+# cat/dog's single 6-frame side-view strip, roughly the same total
+# per-generation complexity budget that worked for those). Mouse's
+# *default* look (mouse_v2.png) already wears a green bow/tutu, so green
+# isn't sold here, matching the cat/dog's own "skip the color the default
+# already has" pattern. Unlike the cat/dog generations, this one actually
+# delivered the requested frame count cleanly (no 5-instead-of-6
+# shortfall, no merged/touching frames needing a row-profile split) - see
+# the sibling kat_trap repo's CLAUDE.md for the fuller extraction story.
+MOUSE_OUTFIT_ITEMS = [
+    {
+        'character': 'mouse',
+        'slug': f'tutu-{color}',
+        'name': f'{color.capitalize()} Tutu',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.OUTFIT,
+        'sprite_src': f'./assets/mouse_v2_tutu_{color}.png?v=1',
+        'description': f'A sparkly {color} tutu for Poop.',
+        'cost': 50,
+        'min_level': 1,
+        'is_active': True,
+    }
+    for color in ['pink', 'teal', 'orange', 'purple']
+]
+
 
 class Command(BaseCommand):
     help = 'Seeds a small PLACEHOLDER store catalog for testing. Safe to re-run.'
 
     def handle(self, *args, **options):
-        for data in PLACEHOLDER_ITEMS + DOG_OUTFIT_ITEMS + CAT_OUTFIT_ITEMS:
+        for data in PLACEHOLDER_ITEMS + DOG_OUTFIT_ITEMS + CAT_OUTFIT_ITEMS + MOUSE_OUTFIT_ITEMS:
             item, created = StoreItem.objects.update_or_create(
                 character=data['character'], slug=data['slug'], defaults=data
             )
