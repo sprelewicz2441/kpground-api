@@ -16,7 +16,7 @@ See `../kat_trap/CLAUDE.md` and `../kpground/CLAUDE.md` for the frontends this s
 - `uv run python manage.py makemigrations` / `migrate`
 - `uv run python manage.py check` — cheap sanity check, worth running before anything else after a settings/model change
 - `uv run python manage.py seed_kathryn` — idempotent: creates the KatTrap OAuth2 `Application` (public client, password grant) + Kathryn's user (unusable password — she only ever authenticates via quick-login) + her three character wallets
-- `uv run python manage.py seed_store` — idempotent: seeds the store catalog. Perks are still placeholder data (real names/costs/cosmetics for Cat/Mouse aren't designed yet), but the dog's outfit cosmetics are real: 4 of 5 planned tutu colors (pink/teal/orange/green) point at real per-color walk-cycle art, `is_active=True`; purple stays a placeholder (`is_active=False`, points at the default `dog_v2.png`) pending its own art regeneration — see the sibling `kat_trap` repo's CLAUDE.md, Currency & economy system section, for that art's own extraction history
+- `uv run python manage.py seed_store` — idempotent: seeds the store catalog. Perks are still placeholder data (real names/costs for Cat/Mouse's own perks aren't designed yet), but all three characters' outfit cosmetics are now real: dog's `DOG_OUTFIT_ITEMS` (4 of 5 planned tutu colors — pink/teal/orange/green — point at real per-color walk-cycle art, `is_active=True`; purple stays a placeholder, `is_active=False`, pointing at the default `dog_v2.png`, pending its own art regeneration), cat's `CAT_OUTFIT_ITEMS` (teal/orange/green/purple — pink skipped, already the default look) and mouse's `MOUSE_OUTFIT_ITEMS` (pink/teal/orange/purple — green skipped, already the default look) — see the sibling `kat_trap` repo's CLAUDE.md, Currency & economy system section, for that art's own extraction history
 
 Local dev needs no setup beyond `uv sync` — `DATABASE_URL` is optional and falls back to a local `db.sqlite3` (gitignored). Copy `.env.example` to `.env` to override any setting.
 
@@ -88,7 +88,7 @@ Environment variables actually set on the Render service (see `.env.example` for
 ## Known gaps (worth knowing before extending this)
 
 - **No test suite.** Verification so far has been manual `curl` checks against a running dev server for every endpoint added, plus `manage.py check` after any model/view/url change.
-- **`seed_store`'s perk catalog is still placeholder data** for exercising the purchase flow, not final game content — real item names/costs for Cat's and Mouse's perks still need designing. The dog's outfit cosmetics are real (see the command above), not placeholder.
+- **`seed_store`'s perk catalog is still placeholder data** for exercising the purchase flow, not final game content — real item names/costs for Cat's and Mouse's own perks still need designing. All three characters' outfit cosmetics are real (see the command above), not placeholder.
 - **`kat_trap` is fully wired up to this API** — wallet/HUD, the Bloomingtails (cosmetics) + Pawgreens (perks) store, purchase/sell/equip/unequip, and round submission all call real endpoints here. `kpground` (the landing page) still has no integration with this API at all — shared account/auth across the whole site is still just the plan, not built.
 
 ## When working in this repo
