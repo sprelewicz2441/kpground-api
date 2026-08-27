@@ -36,6 +36,21 @@ RENDER_EXTERNAL_HOSTNAME = config('RENDER_EXTERNAL_HOSTNAME', default='')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# Render terminates TLS at the edge and forwards to gunicorn over plain
+# HTTP, so Django has to be told explicitly which header carries the
+# original scheme - without this, request.is_secure() can't be trusted and
+# CSRF's Origin check (which compares the browser's Origin header against
+# request.scheme + get_host()) fails with "CSRF verification failed" on
+# every POST (e.g. logging into /admin/), even with a correct password.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Must list the actual origin(s) users load this API's own pages (e.g.
+# /admin/) from, scheme included - distinct from CORS_ALLOWED_ORIGINS below,
+# which is about other origins' JS calling this API, not this API's own forms.
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+if RENDER_EXTERNAL_HOSTNAME:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
+
 
 # Application definition
 
