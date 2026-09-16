@@ -88,17 +88,11 @@ def claim_daily_gift(user):
     return DAILY_GIFT_COINS_PER_CHARACTER
 
 
-@transaction.atomic
-def purchase_item(user, character, item_slug):
-    try:
-        item = StoreItem.objects.get(character=character, slug=item_slug, is_active=True)
-    except StoreItem.DoesNotExist:
-        raise PurchaseError('That item does not exist.')
-
-    wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
-        user=user, character=character
-    )
-
+def _apply_purchase(user, wallet, item):
+    """Shared debit-and-record step behind purchase_item/purchase_decor_item
+    below - the only difference between the two is how `item` itself gets
+    looked up (a character's own catalog vs. the shared decor catalog), not
+    what happens once it's found."""
     if OwnedItem.objects.filter(user=user, item=item).exists():
         raise PurchaseError('You already own this item.')
     if wallet.level < item.min_level:
@@ -109,11 +103,63 @@ def purchase_item(user, character, item_slug):
     wallet.coins -= item.cost
     wallet.save()
     OwnedItem.objects.create(user=user, item=item)
+
+
+@transaction.atomic
+def purchase_item(user, character, item_slug):
+    try:
+        item = StoreItem.objects.get(character=character, slug=item_slug, is_active=True)
+    except StoreItem.DoesNotExist:
+        raise PurchaseError('That item does not exist.')
+
+    wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
+        user=user, character=character
+    )
+    _apply_purchase(user, wallet, item)
+    return wallet
+
+
+@transaction.atomic
+def purchase_decor_item(user, character, item_slug):
+    """Buys a Pet Shop Boys decor item. `character` only decides whose
+    coins pay for it - the item itself isn't scoped to any character (see
+    StoreItem.character's own docstring), and OwnedItem's (user, item) key
+    means the purchase is owned globally: it'll show up in the kitchen
+    regardless of which character is played next."""
+    try:
+        item = StoreItem.objects.get(item_type=ItemType.DECOR, slug=item_slug, is_active=True)
+    except StoreItem.DoesNotExist:
+        raise PurchaseError('That item does not exist.')
+
+    wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
+        user=user, character=character
+    )
+    _apply_purchase(user, wallet, item)
     return wallet
 
 
 class SellError(Exception):
     """Raised for any sell-rejection reason; message is user-facing."""
+
+
+def _apply_sale(user, wallet, item):
+    """Shared refund-and-delete step behind sell_item/sell_decor_item below
+    - see _apply_purchase's own comment for why the split is at the lookup
+    level, not here."""
+    try:
+        owned = OwnedItem.objects.get(user=user, item=item)
+    except OwnedItem.DoesNotExist:
+        raise SellError('You do not own this item.')
+
+    # If this is currently equipped, revert to the default look first -
+    # can't leave an EquippedItem row pointing at an item the user no
+    # longer owns. A no-op for perks and decor, neither of which is ever
+    # equipped.
+    EquippedItem.objects.filter(user=user, item=item).delete()
+
+    owned.delete()
+    wallet.coins += round(item.cost * SELL_REFUND_FRACTION)
+    wallet.save()
 
 
 @transaction.atomic
@@ -123,23 +169,26 @@ def sell_item(user, character, item_slug):
     except StoreItem.DoesNotExist:
         raise SellError('That item does not exist.')
 
+    wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
+        user=user, character=character
+    )
+    _apply_sale(user, wallet, item)
+    return wallet
+
+
+@transaction.atomic
+def sell_decor_item(user, character, item_slug):
+    """Sells a Pet Shop Boys decor item back - same `character`-only-pays/
+    global-ownership split as purchase_decor_item above."""
     try:
-        owned = OwnedItem.objects.get(user=user, item=item)
-    except OwnedItem.DoesNotExist:
-        raise SellError('You do not own this item.')
+        item = StoreItem.objects.get(item_type=ItemType.DECOR, slug=item_slug, is_active=True)
+    except StoreItem.DoesNotExist:
+        raise SellError('That item does not exist.')
 
     wallet, _ = CharacterWallet.objects.select_for_update().get_or_create(
         user=user, character=character
     )
-
-    # If this is currently equipped, revert to the default look first -
-    # can't leave an EquippedItem row pointing at an item the user no
-    # longer owns. A no-op for perks, which are never equipped.
-    EquippedItem.objects.filter(user=user, character=character, item=item).delete()
-
-    owned.delete()
-    wallet.coins += round(item.cost * SELL_REFUND_FRACTION)
-    wallet.save()
+    _apply_sale(user, wallet, item)
     return wallet
 
 

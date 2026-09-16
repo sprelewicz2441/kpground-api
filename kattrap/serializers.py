@@ -52,6 +52,18 @@ class ItemSlugRequestSerializer(serializers.Serializer):
     item_slug = serializers.SlugField()
 
 
+class DecorItemActionSerializer(serializers.Serializer):
+    """Decor purchase/sell's own shape - unlike ItemSlugRequestSerializer,
+    `character` has to travel in the request body rather than the URL,
+    since decor endpoints aren't under a per-character path (the item
+    itself isn't one character's - see StoreItem.character). It's still
+    only "whose wallet pays/gets refunded", same meaning it has everywhere
+    else."""
+
+    character = serializers.ChoiceField(choices=Character.choices)
+    item_slug = serializers.SlugField()
+
+
 class RoundSubmitSerializer(serializers.Serializer):
     character = serializers.ChoiceField(choices=Character.choices)
     result = serializers.ChoiceField(choices=[('win', 'Win'), ('loss', 'Loss')])

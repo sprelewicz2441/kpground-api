@@ -1,9 +1,10 @@
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Character, ItemSlot, OwnedItem, StoreItem
+from .models import Character, ItemSlot, ItemType, OwnedItem, StoreItem
 from .serializers import (
     CharacterWalletSerializer,
+    DecorItemActionSerializer,
     ItemSlugRequestSerializer,
     RoundSubmitSerializer,
     StoreItemSerializer,
@@ -18,7 +19,9 @@ from .services import (
     get_or_create_wallets,
     has_claimed_daily_gift_today,
     ordered_wallets,
+    purchase_decor_item,
     purchase_item,
+    sell_decor_item,
     sell_item,
     submit_round,
     unequip_slot,
@@ -90,6 +93,53 @@ class SellView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             wallet = sell_item(request.user, character, serializer.validated_data['item_slug'])
+        except SellError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        return Response(CharacterWalletSerializer(wallet).data)
+
+
+class DecorStoreView(APIView):
+    """The shared Pet Shop Boys catalog - not scoped to a character (see
+    StoreView above for the per-character equivalent). Ownership is global
+    too: owned_slugs covers every decor item this user owns regardless of
+    which character bought it."""
+
+    def get(self, request):
+        items = StoreItem.objects.filter(item_type=ItemType.DECOR, is_active=True)
+        owned_slugs = set(
+            OwnedItem.objects.filter(
+                user=request.user, item__item_type=ItemType.DECOR
+            ).values_list('item__slug', flat=True)
+        )
+        serializer = StoreItemSerializer(items, many=True, context={'owned_slugs': owned_slugs})
+        return Response(serializer.data)
+
+
+class DecorPurchaseView(APIView):
+    def post(self, request):
+        serializer = DecorItemActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            wallet = purchase_decor_item(
+                request.user,
+                serializer.validated_data['character'],
+                serializer.validated_data['item_slug'],
+            )
+        except PurchaseError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        return Response(CharacterWalletSerializer(wallet).data)
+
+
+class DecorSellView(APIView):
+    def post(self, request):
+        serializer = DecorItemActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            wallet = sell_decor_item(
+                request.user,
+                serializer.validated_data['character'],
+                serializer.validated_data['item_slug'],
+            )
         except SellError as exc:
             return Response({'detail': str(exc)}, status=400)
         return Response(CharacterWalletSerializer(wallet).data)

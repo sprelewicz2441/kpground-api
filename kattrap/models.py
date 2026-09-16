@@ -45,6 +45,13 @@ class CharacterWallet(models.Model):
 class ItemType(models.TextChoices):
     COSMETIC = 'cosmetic', 'Cosmetic'
     PERK = 'perk', 'Perk'
+    # Pet Shop Boys catalog - kitchen decor (fish tank, bird cage, etc.).
+    # Unlike cosmetic/perk, a decor item isn't any one character's - it's
+    # owned globally (see StoreItem.character below, and OwnedItem's own
+    # (user, item) key, already character-less) and shows up in the shared
+    # kitchen regardless of who's playing. No gameplay effect yet - see
+    # StoreItem's own docstring.
+    DECOR = 'decor', 'Decor'
 
 
 class ItemSlot(models.TextChoices):
@@ -63,15 +70,24 @@ class ItemSlot(models.TextChoices):
 
 
 class StoreItem(models.Model):
-    """One character's store catalog entry.
+    """One character's store catalog entry - or, for item_type=DECOR, one
+    shared Pet Shop Boys catalog entry that doesn't belong to a character
+    at all (character is blank for these rows; see below).
 
     Bought with that character's own coins (via its CharacterWallet);
     min_level gates purchase against that same character's wallet.level -
     a Cat item is never gated by Mouse or Dog progress. slot only applies
-    to cosmetics (blank for perks) - see ItemSlot above.
+    to cosmetics (blank for perks and decor) - see ItemSlot above.
     """
 
-    character = models.CharField(max_length=10, choices=Character.choices)
+    # Blank only for item_type=DECOR - decor isn't any one character's
+    # catalog entry, so there's nothing to put here (character choices are
+    # cat/mouse/dog; leaving this '' for decor rather than inventing a 4th
+    # fake "character" keeps Character itself an honest enum of actual
+    # playable characters). unique_together below still holds: every decor
+    # slug shares the same '' character value, so decor slugs just need to
+    # be unique among themselves, same as any one character's own slugs.
+    character = models.CharField(max_length=10, choices=Character.choices, blank=True)
     slug = models.SlugField()
     name = models.CharField(max_length=100)
     item_type = models.CharField(max_length=10, choices=ItemType.choices)
