@@ -191,6 +191,19 @@ PET_SHOP_ITEMS = [
 # slug MUST match a key in that file's HAIR_STYLES. Cat only so far - dog and
 # mouse have no head anchors yet.
 HAIR_ITEMS = [
+    # Real art (kat_trap's assets/hair_cat_twin-buns.png); the two below are
+    # still procedural placeholder shapes.
+    {
+        'character': 'cat',
+        'slug': 'twin-buns',
+        'name': 'Purple Twin Buns',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.HAIR,
+        'description': 'Two glossy round buns on a band for Mia.',
+        'cost': 50,
+        'min_level': 1,
+        'is_active': True,
+    },
     {
         'character': 'cat',
         'slug': 'bow',
