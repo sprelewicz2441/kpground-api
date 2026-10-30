@@ -67,6 +67,12 @@ class ItemSlot(models.TextChoices):
     """
 
     OUTFIT = 'outfit', 'Outfit'
+    # Mane Attraction (hair salon). Unlike an outfit, a hair item isn't a full
+    # alternate sprite sheet - the frontend draws it as an overlay on top of
+    # whatever outfit is equipped (kat_trap's js/utils/hair.js), keyed by the
+    # item's slug, so hair and outfit are equipped simultaneously and
+    # independently (one EquippedItem row per slot).
+    HAIR = 'hair', 'Hair'
 
 
 class StoreItem(models.Model):

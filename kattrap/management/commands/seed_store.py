@@ -185,12 +185,48 @@ PET_SHOP_ITEMS = [
 ]
 
 
+# Mane Attraction (hair salon) hair-slot cosmetics - PLACEHOLDER styles for
+# now. A hair item has no sprite sheet of its own (sprite_src stays blank):
+# kat_trap draws it as an overlay (js/utils/hair.js) keyed by this slug, so the
+# slug MUST match a key in that file's HAIR_STYLES. Cat only so far - dog and
+# mouse have no head anchors yet.
+HAIR_ITEMS = [
+    {
+        'character': 'cat',
+        'slug': 'bow',
+        'name': 'Pink Bow',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.HAIR,
+        'description': 'A big pink bow for Mia.',
+        'cost': 30,
+        'min_level': 1,
+        'is_active': True,
+    },
+    {
+        'character': 'cat',
+        'slug': 'pompadour',
+        'name': 'Purple Pompadour',
+        'item_type': ItemType.COSMETIC,
+        'slot': ItemSlot.HAIR,
+        'description': 'A tall, swooping purple pompadour for Mia.',
+        'cost': 40,
+        'min_level': 1,
+        'is_active': True,
+    },
+]
+
+
 class Command(BaseCommand):
     help = 'Seeds a small PLACEHOLDER store catalog for testing. Safe to re-run.'
 
     def handle(self, *args, **options):
         all_items = (
-            PLACEHOLDER_ITEMS + DOG_OUTFIT_ITEMS + CAT_OUTFIT_ITEMS + MOUSE_OUTFIT_ITEMS + PET_SHOP_ITEMS
+            PLACEHOLDER_ITEMS
+            + DOG_OUTFIT_ITEMS
+            + CAT_OUTFIT_ITEMS
+            + MOUSE_OUTFIT_ITEMS
+            + PET_SHOP_ITEMS
+            + HAIR_ITEMS
         )
         for data in all_items:
             item, created = StoreItem.objects.update_or_create(
